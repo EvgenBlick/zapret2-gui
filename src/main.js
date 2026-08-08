@@ -244,6 +244,20 @@ let startedAt    = null;
 const logBuffer  = [];
 const MAX_LOGS   = 1000;
 
+// ─── Admin check cache (once per session, never spawns cmd.exe again) ───
+let _isAdminCache = null;
+function checkIsAdmin() {
+  if (_isAdminCache !== null) return _isAdminCache;
+  try {
+    // Use net.exe directly — no cmd.exe shell wrapper
+    execSync('net session', { stdio: 'ignore', timeout: 2000 });
+    _isAdminCache = true;
+  } catch (_) {
+    _isAdminCache = false;
+  }
+  return _isAdminCache;
+}
+
 function getAssetPath(filename) {
   const candidates = [
     path.join(__dirname, '..', 'assets', filename),
@@ -413,7 +427,7 @@ async function startEngine(customArgs = null, opts = {}) {
   log('info', `▶ Запуск: ${winwsExe}`);
   log('info', `  Аргументы: ${cmdArgs.join(' ')}`);
 
-  const isAdmin = await new Promise(r => exec('net session', err => r(!err)));
+  const isAdmin = checkIsAdmin();
   if (!isAdmin) {
     log('error', '⚠️ ВНИМАНИЕ: Для работы WinDivert требуются права Администратора! Запустите приложение от имени администратора.');
   }
@@ -524,10 +538,12 @@ let _runningAppsTime  = 0;
 
 handle('system:running-apps', () => new Promise(resolve => {
   const now = Date.now();
-  if (_runningAppsCache && (now - _runningAppsTime < 4000)) {
+  if (_runningAppsCache && (now - _runningAppsTime < 5000)) {
     return resolve(_runningAppsCache);
   }
-  exec('tasklist /FO CSV /NH', { timeout: 3000 }, (err, stdout) => {
+  // Use execFile(tasklist directly) — NO cmd.exe wrapper spawned
+  const { execFile } = require('child_process');
+  execFile('tasklist', ['/FO', 'CSV', '/NH'], { timeout: 4000 }, (err, stdout) => {
     if (err || !stdout) return resolve(_runningAppsCache || []);
     const seen = new Set();
     const apps = stdout.split('\n')
@@ -540,9 +556,8 @@ handle('system:running-apps', () => new Promise(resolve => {
   });
 }));
 
-handle('system:is-admin', () => new Promise(resolve => {
-  exec('net session', err => resolve(!err));
-}));
+// Admin check: use cached result — no cmd.exe spawned after first call
+handle('system:is-admin', () => checkIsAdmin());
 
 handle('system:open-external', url => shell.openExternal(url));
 

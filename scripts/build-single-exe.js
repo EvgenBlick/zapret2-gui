@@ -27,7 +27,13 @@ if (fs.existsSync(buildTmp)) {
 }
 const distAppDir = path.join(distDir, 'Zapret2 Manager-win32-x64');
 
-const iconIco = path.join(rootDir, 'assets', 'icon.ico');
+const iconIco    = path.join(rootDir, 'assets', 'icon.ico');
+const appSrcDir  = path.join(buildTmp, 'Zapret2 Manager-win32-x64');
+
+// Remove stale build_tmp before packaging (avoids locked-file errors)
+if (fs.existsSync(buildTmp)) {
+  try { fs.rmSync(buildTmp, { recursive: true, force: true }); } catch(_) {}
+}
 
 execSync(
   `npx -y @electron/packager . "Zapret2 Manager" --platform=win32 --arch=x64 --out=build_tmp --overwrite --electron-version=31.7.7 --icon="${iconIco}" --asar --extra-resource=bin --extra-resource=assets --ignore="dist|build_tmp|\\.git|scripts"`,
@@ -36,9 +42,11 @@ execSync(
 
 console.log('=== Step 1.5: Copying fresh build to dist/Zapret2 Manager-win32-x64 ===');
 try {
-  execSync(`robocopy "${appDir}" "${distAppDir}" /MIR /NJH /NJS /NC /NS /NP`, { stdio: 'ignore' });
+  // robocopy exits 1-7 on success, only 8+ is error
+  const r = require('child_process').spawnSync('robocopy', [appSrcDir, distAppDir, '/MIR', '/NJH', '/NJS', '/NC', '/NS', '/NP'], { stdio: 'ignore' });
+  if (r.status >= 8) throw new Error('robocopy failed');
 } catch (e) {
-  try { fs.cpSync(appDir, distAppDir, { recursive: true, force: true }); } catch(_) {}
+  try { fs.cpSync(appSrcDir, distAppDir, { recursive: true, force: true }); } catch(_) {}
 }
 
 console.log('=== Step 2: Compressing payload into ZIP via 7za ===');

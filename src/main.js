@@ -244,6 +244,19 @@ let startedAt    = null;
 const logBuffer  = [];
 const MAX_LOGS   = 1000;
 
+function getAssetPath(filename) {
+  const candidates = [
+    path.join(__dirname, '..', 'assets', filename),
+    path.join(process.resourcesPath, 'assets', filename),
+    path.join(process.resourcesPath, filename),
+    path.join(app.getAppPath(), 'assets', filename)
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return path.join(__dirname, '..', 'assets', filename);
+}
+
 // ─── Window ───────────────────────────────────────────────
 async function createWindow() {
   const store  = await getStore();
@@ -264,7 +277,7 @@ async function createWindow() {
       sandbox:          false,
       devTools:         true          // Always allow devTools for debugging
     },
-    icon: path.join(__dirname, '..', 'assets', 'icon.png')
+    icon: nativeImage.createFromPath(getAssetPath('icon.png'))
   });
 
   const IS_TEST = process.env.NODE_ENV === 'test';
@@ -297,7 +310,7 @@ async function createWindow() {
       tray.displayBalloon?.({
         title:   'Zapret2 Manager',
         content: 'Приложение свёрнуто в трей',
-        icon:    nativeImage.createEmpty()
+        icon:    nativeImage.createFromPath(getAssetPath('icon.png'))
       });
     }
   });
@@ -308,18 +321,10 @@ async function createWindow() {
 // ─── Tray ─────────────────────────────────────────────────
 function createTray() {
   try {
-    let iconPath = path.join(__dirname, '..', 'assets', 'tray.png');
-    if (!fs.existsSync(iconPath)) {
-      iconPath = path.join(process.resourcesPath, 'assets', 'tray.png');
-    }
+    const iconPath = getAssetPath('tray.png');
     let icon = fs.existsSync(iconPath)
       ? nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
-      : null;
-
-    if (!icon || icon.isEmpty()) {
-      const b64 = 'iVBORw0KGgoAAAANSU56UhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAzSURBVDhPY2AYBaNgOIApUa3/oYn9x6aGgTGBiXkMTAyM2E0jWz8D44NhFAx3AAA6JwcRFx9EcwAAAABJRU5ErkJggg==';
-      icon = nativeImage.createFromBuffer(Buffer.from(b64, 'base64'));
-    }
+      : nativeImage.createFromPath(getAssetPath('icon.png')).resize({ width: 16, height: 16 });
 
     tray = new Tray(icon);
     tray.setToolTip('Zapret2 Manager');
@@ -511,14 +516,23 @@ handle('dialog:exe', () =>
   }).then(r => r.canceled ? null : r.filePaths[0])
 );
 
+let _runningAppsCache = null;
+let _runningAppsTime  = 0;
+
 handle('system:running-apps', () => new Promise(resolve => {
+  const now = Date.now();
+  if (_runningAppsCache && (now - _runningAppsTime < 4000)) {
+    return resolve(_runningAppsCache);
+  }
   exec('tasklist /FO CSV /NH', { timeout: 3000 }, (err, stdout) => {
-    if (err || !stdout) return resolve([]);
+    if (err || !stdout) return resolve(_runningAppsCache || []);
     const seen = new Set();
     const apps = stdout.split('\n')
       .map(l => { const p = l.split('","'); return { name: (p[0] || '').replace(/"/g,''), pid: (p[1]||'').replace(/"/g,'') }; })
       .filter(a => a.name.endsWith('.exe') && !seen.has(a.name) && seen.add(a.name))
       .sort((a,b) => a.name.localeCompare(b.name));
+    _runningAppsCache = apps;
+    _runningAppsTime  = Date.now();
     resolve(apps);
   });
 }));

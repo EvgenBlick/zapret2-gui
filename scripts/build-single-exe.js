@@ -27,8 +27,10 @@ if (fs.existsSync(buildTmp)) {
 }
 const distAppDir = path.join(distDir, 'Zapret2 Manager-win32-x64');
 
+const iconIco = path.join(rootDir, 'assets', 'icon.ico');
+
 execSync(
-  'npx -y @electron/packager . "Zapret2 Manager" --platform=win32 --arch=x64 --out=build_tmp --overwrite --electron-version=31.7.7 --asar --extra-resource=bin --extra-resource=assets --ignore="dist|build_tmp|\\.git|scripts"',
+  `npx -y @electron/packager . "Zapret2 Manager" --platform=win32 --arch=x64 --out=build_tmp --overwrite --electron-version=31.7.7 --icon="${iconIco}" --asar --extra-resource=bin --extra-resource=assets --ignore="dist|build_tmp|\\.git|scripts"`,
   { cwd: rootDir, stdio: 'inherit' }
 );
 
@@ -136,7 +138,7 @@ console.log('=== Step 4: Compiling Standalone EXE using csc.exe ===');
 if (fs.existsSync(exePath)) fs.unlinkSync(exePath);
 
 const manifestPath = path.join(rootDir, 'scripts', 'app.manifest');
-const cscCmd = `"${cscExe}" /nologo /out:"${exePath}" /target:winexe /win32manifest:"${manifestPath}" /resource:"${zipPath}",payload.zip /reference:System.IO.Compression.FileSystem.dll /reference:System.IO.Compression.dll "${csPath}"`;
+const cscCmd = `"${cscExe}" /nologo /out:"${exePath}" /target:winexe /win32icon:"${iconIco}" /win32manifest:"${manifestPath}" /resource:"${zipPath}",payload.zip /reference:System.IO.Compression.FileSystem.dll /reference:System.IO.Compression.dll "${csPath}"`;
 execSync(cscCmd, { stdio: 'inherit' });
 
 // Cleanup temp build files

@@ -12,7 +12,7 @@ const {
 const path    = require('path');
 const fs      = require('fs');
 const os      = require('os');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execSync } = require('child_process');
 
 // ─── Constants ────────────────────────────────────────────
 const IS_DEV     = process.argv.includes('--dev') || !app.isPackaged;
@@ -443,19 +443,22 @@ async function startEngine(customArgs = null) {
 }
 
 async function stopEngine() {
-  if (!isRunning) return { ok: true };
+  if (!isRunning && !winwsProcess) return { ok: true };
   log('info', '■ Остановка Zapret2...');
   try {
     if (winwsProcess) {
-      winwsProcess.kill('SIGTERM');
+      try { winwsProcess.kill('SIGTERM'); } catch (_) {}
       winwsProcess = null;
     }
-    // Force-kill leftover processes on Windows
-    if (IS_WIN) exec('taskkill /F /IM winws2.exe 2>nul', () => {});
+    // Synchronously force-kill process tree to prevent orphaned winws2/cmd.exe in Task Manager
+    if (IS_WIN) {
+      try { execSync('taskkill /F /T /IM winws2.exe 2>nul', { timeout: 3000 }); } catch (_) {}
+    }
     startedAt = null;
     setRunning(false);
     return { ok: true };
   } catch (e) {
+    log('error', `Ошибка остановки: ${e.message}`);
     return { ok: false, err: e.message };
   }
 }
@@ -708,7 +711,7 @@ handle('win:close',     async () => {
       tray.displayBalloon?.({
         title: 'Zapret2 Manager',
         content: 'Приложение свёрнуто в трей и продолжает работать в фоне',
-        icon: nativeImage.createEmpty()
+        icon: nativeImage.createFromPath(getAssetPath('icon.png'))
       });
     } catch (_) {}
   } else {
@@ -738,9 +741,18 @@ app.whenReady().then(async () => {
   log('info', `Папка binaries: ${BIN_DIR}`);
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', async (e) => {
+  if (app.isQuitting) return;
   app.isQuitting = true;
-  stopEngine();
+  // Prevent quit until engine is fully stopped — avoids orphaned winws2/node in Task Manager
+  if (isRunning || winwsProcess) {
+    e.preventDefault();
+    try {
+      await stopEngine();
+    } catch (_) {}
+    // Give OS time to reap child processes before exit
+    setTimeout(() => app.quit(), 400);
+  }
 });
 
 app.on('window-all-closed', () => {

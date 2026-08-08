@@ -1,0 +1,14 @@
+# Node dependencies
+node_modules/
+
+# Build outputs
+dist/
+build_tmp/
+*.zip
+*.exe
+
+# Logs & temporary files
+*.log
+all_presets.json
+.DS_Store
+Thumbs.db

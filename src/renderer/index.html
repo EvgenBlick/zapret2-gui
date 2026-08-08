@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data:"/>
+  <title>Zapret2 Manager</title>
+  <meta name="description" content="Управление zapret2: обход DPI, раздельное туннелирование, Windows"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     TITLEBAR — Custom frameless window bar
+     ════════════════════════════════════════ -->
+<header class="titlebar" id="titlebar" role="banner" aria-label="Заголовок приложения">
+  <div class="titlebar__left">
+    <div class="titlebar__logo" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="url(#lg1)" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M2 17l10 5 10-5"           stroke="url(#lg2)" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M2 12l10 5 10-5"           stroke="url(#lg3)" stroke-width="1.8" stroke-linecap="round"/>
+        <defs>
+          <linearGradient id="lg1" x1="2" y1="2"  x2="22" y2="12" gradientUnits="userSpaceOnUse"><stop stop-color="#a78bfa"/><stop offset="1" stop-color="#38bdf8"/></linearGradient>
+          <linearGradient id="lg2" x1="2" y1="17" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#7c3aed"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient>
+          <linearGradient id="lg3" x1="2" y1="12" x2="22" y2="17" gradientUnits="userSpaceOnUse"><stop stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+        </defs>
+      </svg>
+    </div>
+    <span class="titlebar__name">Zapret2 Manager</span>
+    <span class="titlebar__version">v1.1</span>
+  </div>
+
+  <div class="titlebar__status" id="tb-status" aria-live="polite">
+    <span class="titlebar__status-dot" id="tb-dot"></span>
+    <span id="tb-status-text">Остановлен</span>
+  </div>
+
+  <div class="titlebar__controls" role="group" aria-label="Управление окном">
+    <button class="titlebar__btn" id="btn-minimize" title="Свернуть" aria-label="Свернуть">
+      <svg width="11" height="2"  viewBox="0 0 11 2"><line x1="0" y1="1" x2="11" y2="1" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+    <button class="titlebar__btn" id="btn-maximize" title="Развернуть" aria-label="Развернуть">
+      <svg width="10" height="10" viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" rx="1.5" stroke="currentColor" fill="none" stroke-width="1.5"/></svg>
+    </button>
+    <button class="titlebar__btn titlebar__btn--close" id="btn-close" title="Закрыть" aria-label="Закрыть">
+      <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════
+     MAIN LAYOUT
+     ════════════════════════════════════════ -->
+<div class="layout" id="app-layout">
+
+  <!-- ── SIDEBAR ──────────────────────────── -->
+  <nav class="sidebar" id="sidebar" role="navigation" aria-label="Основная навигация">
+
+    <!-- Engine toggle at top of sidebar -->
+    <div class="sidebar__engine">
+      <div class="engine-toggle" id="engine-toggle" role="button" tabindex="0"
+           aria-label="Включить/выключить Zapret2" aria-pressed="false">
+        <div class="engine-toggle__ring" id="engine-ring">
+          <svg class="engine-toggle__svg" viewBox="0 0 80 80" aria-hidden="true">
+            <circle class="engine-ring-track"    cx="40" cy="40" r="34"/>
+            <circle class="engine-ring-progress" id="engine-ring-prog" cx="40" cy="40" r="34"/>
+          </svg>
+          <div class="engine-toggle__icon" id="engine-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+              <line x1="12" y1="2" x2="12" y2="12"/>
+            </svg>
+          </div>
+        </div>
+        <div class="engine-toggle__label">
+          <span class="engine-toggle__state" id="engine-state-text">Выключен</span>
+          <span class="engine-toggle__hint">Нажми для старта</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nav items -->
+    <ul class="sidebar__nav" role="list">
+      <li role="listitem">
+        <button class="nav-btn active" data-page="dashboard" aria-current="page" id="nav-dashboard">
+          <svg class="nav-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+          <span>Дашборд</span>
+        </button>
+      </li>
+      <li role="listitem">
+        <button class="nav-btn" data-page="apps" id="nav-apps">
+          <svg class="nav-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <path d="M8 21h8M12 17v4"/>
+          </svg>
+          <span>Приложения</span>
+          <span class="nav-btn__badge" id="badge-apps" aria-label="кол-во приложений">0</span>
+        </button>
+      </li>
+      <li role="listitem">
+        <button class="nav-btn" data-page="sites" id="nav-sites">
+          <svg class="nav-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span>Сайты</span>
+          <span class="nav-btn__badge" id="badge-sites" aria-label="кол-во сайтов">0</span>
+        </button>
+      </li>
+      <li role="listitem">
+        <button class="nav-btn" data-page="profiles" id="nav-profiles">
+          <svg class="nav-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+          <span>Профили</span>
+        </button>
+      </li>
+      <li role="listitem">
+        <button class="nav-btn" data-page="logs" id="nav-logs">
+          <svg class="nav-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          <span>Логи</span>
+          <span class="nav-btn__badge nav-btn__badge--warn hidden" id="badge-logs" aria-live="polite">!</span>
+        </button>
+      </li>
+      <li role="listitem">
+        <button class="nav-btn" data-page="settings" id="nav-settings">
+          <svg class="nav-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Настройки</span>
+        </button>
+      </li>
+    </ul>
+
+    <footer class="sidebar__footer">
+      <button class="sidebar__gh-link" id="btn-gh" aria-label="Открыть GitHub репозиторий zapret2">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+        </svg>
+        bol-van/zapret2
+      </button>
+    </footer>
+  </nav>
+
+  <!-- ── MAIN CONTENT ──────────────────────── -->
+  <main class="content" id="main-content" role="main">
+
+    <!-- Admin warning banner -->
+    <aside class="admin-banner hidden" id="admin-banner" role="alert" aria-live="assertive">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9"  x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      <span>Для работы WinDivert запустите приложение <strong>от имени администратора</strong></span>
+      <button class="admin-banner__dismiss" id="admin-dismiss" aria-label="Закрыть уведомление">✕</button>
+    </aside>
+
+    <!-- ══ PAGE: DASHBOARD ══ -->
+    <section class="page page--dashboard active" id="page-dashboard" aria-label="Дашборд">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Дашборд</h1>
+          <p class="page-subtitle">Управление и мониторинг Zapret2</p>
+        </div>
+      </div>
+
+      <!-- Hero card -->
+      <div class="hero-card" id="hero-card">
+        <div class="hero-card__bg" aria-hidden="true"></div>
+        <div class="hero-card__content">
+          <div class="hero-card__status-ring" aria-hidden="true">
+            <svg class="hero-ring-svg" viewBox="0 0 140 140">
+              <circle class="hero-ring-track"   cx="70" cy="70" r="62"/>
+              <circle class="hero-ring-fill"    id="hero-ring-fill" cx="70" cy="70" r="62"/>
+            </svg>
+            <div class="hero-ring-center" id="hero-ring-center">
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" id="hero-icon">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="hero-card__info">
+            <h2 class="hero-card__title" id="hero-title">Защита отключена</h2>
+            <p  class="hero-card__sub"   id="hero-sub">Нажмите кнопку или пробел для старта</p>
+            <div class="hero-card__uptime hidden" id="hero-uptime-row">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span id="hero-uptime">00:00</span>
+            </div>
+            <div class="hero-card__actions">
+              <button class="btn btn--primary btn--lg" id="btn-engine-toggle">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" id="btn-engine-icon">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <span id="btn-engine-text">Запустить</span>
+              </button>
+              <button class="btn btn--secondary btn--lg" id="btn-auto-scan" title="Автоматический перебор всех комбинаций и стратегий обхода DPI">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                <span>🎯 Авто-подбор DPI</span>
+              </button>
+              <button class="btn btn--ghost btn--icon-only" id="btn-restart" title="Перезапустить" aria-label="Перезапустить Zapret2" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-row" role="region" aria-label="Статистика">
+        <article class="stat-card" id="stat-apps-card">
+          <div class="stat-card__icon stat-card__icon--purple" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-card__val" id="stat-apps-val">0</div>
+            <div class="stat-card__label">Приложений</div>
+          </div>
+        </article>
+        <article class="stat-card" id="stat-sites-card">
+          <div class="stat-card__icon stat-card__icon--cyan" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-card__val" id="stat-sites-val">0</div>
+            <div class="stat-card__label">Сайтов</div>
+          </div>
+        </article>
+        <article class="stat-card" id="stat-uptime-card">
+          <div class="stat-card__icon stat-card__icon--green" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-card__val" id="stat-uptime-val">—</div>
+            <div class="stat-card__label">Аптайм</div>
+          </div>
+        </article>
+        <article class="stat-card" id="stat-profile-card">
+          <div class="stat-card__icon stat-card__icon--amber" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-card__val" id="stat-profile-val">default</div>
+            <div class="stat-card__label">Профиль</div>
+          </div>
+        </article>
+      </div>
+
+      <!-- Quick actions -->
+      <section aria-labelledby="quick-heading">
+        <h2 class="section-heading" id="quick-heading">Быстрые действия</h2>
+        <div class="quick-grid">
+          <button class="quick-card" data-page="apps">
+            <div class="quick-card__icon" style="--qc-color:#7c3aed" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </div>
+            <div class="quick-card__text">
+              <strong>Добавить приложение</strong>
+              <span>В список обхода туннеля</span>
+            </div>
+            <svg class="quick-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+          <button class="quick-card" data-page="sites">
+            <div class="quick-card__icon" style="--qc-color:#0891b2" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10z"/></svg>
+            </div>
+            <div class="quick-card__text">
+              <strong>Добавить сайт</strong>
+              <span>Прямое соединение по домену</span>
+            </div>
+            <svg class="quick-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+          <button class="quick-card" data-page="logs">
+            <div class="quick-card__icon" style="--qc-color:#d97706" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+            </div>
+            <div class="quick-card__text">
+              <strong>Просмотр логов</strong>
+              <span>Вывод winws2 в реальном времени</span>
+            </div>
+            <svg class="quick-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+          <button class="quick-card" data-page="settings">
+            <div class="quick-card__icon" style="--qc-color:#059669" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09"/></svg>
+            </div>
+            <div class="quick-card__text">
+              <strong>Настройки</strong>
+              <span>Путь к binaries, профили</span>
+            </div>
+            <svg class="quick-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </section>
+    </section>
+
+    <!-- ══ PAGE: APPS ══ -->
+    <section class="page" id="page-apps" aria-label="Управление приложениями">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Приложения</h1>
+          <p class="page-subtitle">Трафик этих приложений идёт напрямую, минуя DPI-фильтр</p>
+        </div>
+        <button class="btn btn--primary" id="btn-add-app" aria-haspopup="dialog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Добавить
+        </button>
+      </div>
+
+      <div class="searchbar" role="search">
+        <svg class="searchbar__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="searchbar__input" type="search" id="apps-search" placeholder="Поиск приложений..." aria-label="Поиск приложений"/>
+      </div>
+
+      <div class="item-list" id="apps-list" role="list" aria-live="polite">
+        <div class="empty-state" id="apps-empty">
+          <div class="empty-state__icon" aria-hidden="true">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          </div>
+          <p class="empty-state__title">Нет приложений</p>
+          <p class="empty-state__sub">Добавьте .exe которые должны работать напрямую</p>
+          <button class="btn btn--ghost" id="btn-add-app-empty">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Добавить приложение
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ PAGE: SITES ══ -->
+    <section class="page" id="page-sites" aria-label="Управление сайтами">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Сайты</h1>
+          <p class="page-subtitle">Домены в hostlist — прямое соединение без обработки DPI</p>
+        </div>
+        <button class="btn btn--primary" id="btn-add-site" aria-haspopup="dialog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Добавить
+        </button>
+      </div>
+
+      <div class="searchbar" role="search">
+        <svg class="searchbar__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="searchbar__input" type="search" id="sites-search" placeholder="Поиск доменов..." aria-label="Поиск доменов"/>
+      </div>
+
+      <div class="item-list" id="sites-list" role="list" aria-live="polite">
+        <div class="empty-state" id="sites-empty">
+          <div class="empty-state__icon" aria-hidden="true">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10z"/></svg>
+          </div>
+          <p class="empty-state__title">Нет сайтов</p>
+          <p class="empty-state__sub">Добавьте домены для прямого соединения</p>
+          <button class="btn btn--ghost" id="btn-add-site-empty">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Добавить сайт
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ PAGE: PROFILES ══ -->
+    <section class="page" id="page-profiles" aria-label="Профили запуска">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Профили</h1>
+          <p class="page-subtitle">Наборы параметров winws2 для разных сценариев</p>
+        </div>
+        <button class="btn btn--primary" id="btn-add-profile">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Новый профиль
+        </button>
+      </div>
+      <div class="profiles-grid" id="profiles-grid" role="list"></div>
+    </section>
+
+    <!-- ══ PAGE: LOGS ══ -->
+    <section class="page page--logs" id="page-logs" aria-label="Логи работы">
+      <div class="page-header">
+        <h1 class="page-title">Логи</h1>
+        <div class="page-header__actions">
+          <select class="select" id="log-level-filter" aria-label="Фильтр уровня логов">
+            <option value="all">Все уровни</option>
+            <option value="info">info</option>
+            <option value="stdout">stdout</option>
+            <option value="stderr">stderr</option>
+            <option value="error">error</option>
+          </select>
+          <button class="btn btn--ghost btn--sm" id="btn-copy-logs" aria-label="Копировать логи">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Копировать
+          </button>
+          <button class="btn btn--ghost btn--sm" id="btn-clear-logs" aria-label="Очистить логи">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+            Очистить
+          </button>
+        </div>
+      </div>
+      <div class="log-pane" id="log-pane" role="log" aria-live="polite" aria-label="Журнал событий">
+        <div class="empty-state" id="logs-empty">
+          <div class="empty-state__icon" aria-hidden="true">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <p class="empty-state__title">Нет логов</p>
+          <p class="empty-state__sub">Запустите Zapret2 чтобы увидеть вывод</p>
+        </div>
+      </div>
+      <div class="log-footer">
+        <label class="log-footer__autoscroll">
+          <input type="checkbox" id="log-autoscroll" checked aria-label="Автопрокрутка логов"/>
+          <span>Автопрокрутка</span>
+        </label>
+        <span class="log-footer__count" id="log-count" aria-live="polite">0 записей</span>
+      </div>
+    </section>
+
+    <!-- ══ PAGE: SETTINGS ══ -->
+    <section class="page" id="page-settings" aria-label="Настройки приложения">
+      <div class="page-header">
+        <h1 class="page-title">Настройки</h1>
+        <button class="btn btn--primary" id="btn-save-settings">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13"/><polyline points="7 3 7 8 15 8"/></svg>
+          Сохранить
+        </button>
+      </div>
+
+      <div class="settings-layout">
+        <!-- Mode / Status -->
+        <fieldset class="settings-card">
+          <legend class="settings-card__legend">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Режим работы
+          </legend>
+          <div class="field">
+            <div class="status-badge-inline">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Автономный режим: Движок Zapret2 встроен
+            </div>
+            <p class="field__hint">Все бинарники и скрипты запакованы внутри приложения</p>
+          </div>
+        </fieldset>
+
+        <!-- Behavior -->
+        <fieldset class="settings-card">
+          <legend class="settings-card__legend">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/></svg>
+            Поведение
+          </legend>
+          <label class="toggle-row" for="s-autostart">
+            <div class="toggle-row__info">
+              <span class="toggle-row__title">Автозапуск при старте</span>
+              <span class="toggle-row__sub">Zapret2 запускается автоматически</span>
+            </div>
+            <div class="toggle" id="tog-autostart" role="switch" aria-checked="false" aria-label="Автозапуск">
+              <div class="toggle__knob"></div>
+            </div>
+          </label>
+          <label class="toggle-row" for="s-tray">
+            <div class="toggle-row__info">
+              <span class="toggle-row__title">Свернуть в трей при закрытии</span>
+              <span class="toggle-row__sub">Приложение остаётся в фоне</span>
+            </div>
+            <div class="toggle toggle--on" id="tog-tray" role="switch" aria-checked="true" aria-label="Свернуть в трей">
+              <div class="toggle__knob"></div>
+            </div>
+          </label>
+        </fieldset>
+
+        <!-- Engine params -->
+        <fieldset class="settings-card settings-card--wide">
+          <legend class="settings-card__legend">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            Стратегия и параметры winws2
+          </legend>
+          <div class="field">
+            <label class="field__label" for="s-preset-select">Готовый пресет обхода</label>
+            <select class="select" id="s-preset-select" style="width: 100%;" aria-label="Готовый пресет">
+              <option value="youtube-discord">🚀 YouTube + Discord (Рекомендуемый)</option>
+              <option value="standard">🛡️ Стандартный AntiDPI</option>
+              <option value="auto">🔍 Автоматический подбор (Auto-detect)</option>
+              <option value="aggressive">⚡ Усиленный обход (Fake + Split)</option>
+              <option value="custom">⚙️ Пользовательский</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field__label" for="s-wf-args">WinDivert фильтр</label>
+            <input class="input input--mono" type="text" id="s-wf-args"
+              placeholder="--wf-tcp-out=80,443 --wf-udp-out=443"/>
+          </div>
+          <div class="field">
+            <label class="field__label" for="s-lua-init">Lua init скрипт</label>
+            <input class="input input--mono" type="text" id="s-lua-init" placeholder="zapret-antidpi.lua"/>
+            <p class="field__hint">Скрипт из встроенной папки lua/</p>
+          </div>
+          <div class="field">
+            <label class="field__label" for="s-extra">Дополнительные аргументы</label>
+            <textarea class="input input--mono input--textarea" id="s-extra" rows="2"
+              placeholder="--debug&#10;--qnum=200"></textarea>
+          </div>
+        </fieldset>
+
+        <!-- About -->
+        <fieldset class="settings-card">
+          <legend class="settings-card__legend">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            О программе
+          </legend>
+          <dl class="about-list">
+            <div class="about-list__row"><dt>GUI версия</dt><dd>1.1.0</dd></div>
+            <div class="about-list__row"><dt>Движок</dt><dd>zapret2 / winws2</dd></div>
+            <div class="about-list__row"><dt>Автор движка</dt><dd>bol-van</dd></div>
+            <div class="about-list__row"><dt>Платформа</dt><dd>Windows (WinDivert)</dd></div>
+          </dl>
+          <div class="about-links">
+            <button class="btn btn--ghost btn--sm" id="btn-open-github">GitHub Repository</button>
+            <button class="btn btn--ghost btn--sm" id="btn-open-releases">Скачать binaries</button>
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+  </main><!-- /main.content -->
+</div><!-- /layout -->
+
+<!-- ════════════════════════════════════════
+     MODALS
+     ════════════════════════════════════════ -->
+
+<!-- Add App Modal -->
+<div class="modal-overlay" id="modal-apps" role="dialog" aria-modal="true" aria-label="Добавить приложение" hidden>
+  <div class="modal">
+    <header class="modal__header">
+      <h2 class="modal__title">Добавить приложение</h2>
+      <button class="modal__close" data-close-modal="modal-apps" aria-label="Закрыть">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </header>
+    <div class="modal__body">
+      <div class="tabs" role="tablist" aria-label="Способ добавления">
+        <button class="tab tab--active" role="tab" data-tab="tab-browse" aria-selected="true" id="tabBtn-browse" aria-controls="tab-browse">Выбрать файл</button>
+        <button class="tab" role="tab" data-tab="tab-running" aria-selected="false" id="tabBtn-running" aria-controls="tab-running">Запущенные</button>
+      </div>
+      <div class="tab-panel" id="tab-browse" role="tabpanel" aria-labelledby="tabBtn-browse">
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Перетащите или выберите .exe файл">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Перетащите .exe файл</p>
+          <span>или</span>
+          <button class="btn btn--ghost btn--sm" id="btn-browse-exe">Выбрать файл</button>
+        </div>
+        <div class="file-preview hidden" id="file-preview" aria-live="polite">
+          <div class="file-preview__icon" aria-hidden="true">📦</div>
+          <div class="file-preview__info">
+            <strong id="file-preview-name"></strong>
+            <code id="file-preview-path"></code>
+          </div>
+          <button class="btn btn--ghost btn--sm" id="btn-clear-file" aria-label="Убрать выбранный файл">Убрать</button>
+        </div>
+      </div>
+      <div class="tab-panel hidden" id="tab-running" role="tabpanel" aria-labelledby="tabBtn-running">
+        <div class="searchbar" role="search">
+          <svg class="searchbar__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input class="searchbar__input" type="search" id="running-search" placeholder="Фильтр процессов..." aria-label="Фильтр запущенных процессов"/>
+        </div>
+        <div class="running-list" id="running-list" role="listbox" aria-label="Запущенные процессы">
+          <div class="skeleton-list" id="running-skeleton" aria-hidden="true">
+            <div class="skeleton-item"></div><div class="skeleton-item"></div>
+            <div class="skeleton-item"></div><div class="skeleton-item"></div>
+            <div class="skeleton-item"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="modal__footer">
+      <div class="modal__name-row">
+        <label class="field__label" for="app-name-input">Имя (необязательно)</label>
+        <input class="input" type="text" id="app-name-input" placeholder="Например: Steam"/>
+      </div>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" data-close-modal="modal-apps">Отмена</button>
+        <button class="btn btn--primary" id="btn-confirm-add-app">Добавить</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- Add Site Modal -->
+<div class="modal-overlay" id="modal-sites" role="dialog" aria-modal="true" aria-label="Добавить сайты" hidden>
+  <div class="modal">
+    <header class="modal__header">
+      <h2 class="modal__title">Добавить домены</h2>
+      <button class="modal__close" data-close-modal="modal-sites" aria-label="Закрыть">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </header>
+    <div class="modal__body">
+      <div class="field" style="margin-bottom:12px;">
+        <label class="field__label" for="site-type-select">Тип добавления</label>
+        <select class="select" id="site-type-select" style="width:100%;">
+          <option value="include">🌐 Обход DPI (Hostlist - Раздельное туннелирование)</option>
+          <option value="exclude">🚫 Исключение (Hostlist Exclude - Работать напрямую)</option>
+        </select>
+      </div>
+      <label class="field__label" for="sites-input">Домены (по одному на строку)</label>
+      <textarea class="input input--mono input--textarea" id="sites-input" rows="6"
+        placeholder="youtube.com&#10;google.com&#10;*.example.com&#10;gosuslugi.ru" aria-describedby="sites-hint"></textarea>
+      <p class="field__hint" id="sites-hint">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Поддерживается wildcard: *.example.com
+      </p>
+    </div>
+    <footer class="modal__footer">
+      <div class="modal__actions">
+        <button class="btn btn--ghost" data-close-modal="modal-sites">Отмена</button>
+        <button class="btn btn--primary" id="btn-confirm-add-site">Добавить</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- Profile Edit Modal -->
+<div class="modal-overlay" id="modal-profile" role="dialog" aria-modal="true" aria-label="Редактировать профиль" hidden>
+  <div class="modal">
+    <header class="modal__header">
+      <h2 class="modal__title" id="modal-profile-title">Новый профиль</h2>
+      <button class="modal__close" data-close-modal="modal-profile" aria-label="Закрыть">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </header>
+    <div class="modal__body">
+      <input type="hidden" id="profile-edit-id"/>
+      <div class="field">
+        <label class="field__label" for="profile-name">Название</label>
+        <input class="input" type="text" id="profile-name" placeholder="Мой профиль"/>
+      </div>
+      <div class="field">
+        <label class="field__label" for="profile-args">Аргументы</label>
+        <input class="input input--mono" type="text" id="profile-args"
+          placeholder="--wf-tcp-out=80,443 --wf-udp-out=443"/>
+      </div>
+      <div class="field">
+        <label class="field__label" for="profile-lua">Lua init</label>
+        <input class="input input--mono" type="text" id="profile-lua" placeholder="@zapret-antidpi.lua"/>
+      </div>
+    </div>
+    <footer class="modal__footer">
+      <div class="modal__actions">
+        <button class="btn btn--ghost" data-close-modal="modal-profile">Отмена</button>
+        <button class="btn btn--primary" id="btn-confirm-profile">Сохранить</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- Auto DPI Scan Modal -->
+<div class="modal-overlay" id="modal-scan" role="dialog" aria-modal="true" aria-label="Авто-подбор стратегии DPI" hidden>
+  <div class="modal card" style="max-width: 520px; width: 100%;">
+    <header class="modal__header">
+      <h2 class="modal__title">🎯 Авто-подбор стратегии DPI</h2>
+      <button class="modal__close" data-close-modal="modal-scan" aria-label="Закрыть">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </header>
+    <div class="modal__body">
+      <p style="color:var(--c-text-secondary);font-size:13px;margin-bottom:16px;line-height:1.5;">
+        Автоматический перебор комбинаций фальшивых пакетов, смещений и задержек, пока заблокированный ресурс не ответит на запрос.
+      </p>
+      <div class="field" style="margin-bottom:16px;">
+        <label class="field__label" for="scan-url-input">Целевой узел для проверки</label>
+        <input class="input" id="scan-url-input" value="https://www.youtube.com" placeholder="https://www.youtube.com"/>
+      </div>
+      <div class="scan-status-box hidden" id="scan-status-box" style="padding:16px;background:var(--c-bg-input);border-radius:var(--r-md);margin-bottom:16px;border:1px solid var(--c-border);">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span class="spinner" id="scan-spinner"></span>
+          <span id="scan-status-text" style="font-weight:600;font-size:13px;">Инициализация сканера...</span>
+        </div>
+        <div style="height:6px;background:var(--c-bg-base);border-radius:99px;overflow:hidden;">
+          <div id="scan-progress-bar" style="height:100%;width:0%;background:var(--c-accent);transition:width 0.3s ease;"></div>
+        </div>
+      </div>
+    </div>
+    <footer class="modal__footer">
+      <div class="modal__actions">
+        <button class="btn btn--ghost" data-close-modal="modal-scan">Отмена</button>
+        <button class="btn btn--primary" id="btn-start-scan">Запустить сканер</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     TOAST NOTIFICATIONS
+     ════════════════════════════════════════ -->
+<div class="toast-container" id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

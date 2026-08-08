@@ -1053,6 +1053,69 @@ body {
   margin-bottom: 8px;
 }
 
+/* ── SETTINGS PAGE LAYOUT & CARDS ────────────────────── */
+#page-settings {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto !important;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  padding-bottom: 40px;
+}
+
+.settings-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 900px;
+}
+
+.settings-card {
+  background: var(--c-bg-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  padding: 20px 24px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+}
+
+.settings-card__legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--c-text-primary);
+  padding: 0 4px;
+  margin-bottom: 4px;
+  float: none;
+  width: auto;
+}
+
+.settings-card .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-card .field__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+}
+
+.settings-card .field__hint {
+  font-size: 12px;
+  color: var(--c-text-tertiary);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
 /* ── 14. EMPTY STATES ──────────────────────────────────────────── */
 .empty-state {
   display: flex;

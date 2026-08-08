@@ -183,6 +183,10 @@ function wireDashboard() {
   $('btn-restart')?.addEventListener('click', restartEngine);
   $('btn-auto-scan')?.addEventListener('click', openScanModal);
   $('btn-start-scan')?.addEventListener('click', runAutoScanner);
+  $('btn-cancel-scan')?.addEventListener('click', () => {
+    S._scanCancelled = true;
+    showToast('Сканирование отменено', 'info');
+  });
 }
 
 function openScanModal() {
@@ -196,13 +200,17 @@ async function runAutoScanner() {
   const txt = $('scan-status-text');
   const bar = $('scan-progress-bar');
   const btn = $('btn-start-scan');
+  const cancelBtn = $('btn-cancel-scan');
 
+  S._scanCancelled = false;
   if (box) box.classList.remove('hidden');
   if (btn) btn.disabled = true;
+  if (cancelBtn) cancelBtn.disabled = false;
   if (bar) bar.style.width = '0%';
   if (txt) txt.textContent = 'Инициализация перебора...';
 
   const unsub = api.on.scanProgress(({ index, total, name }) => {
+    if (S._scanCancelled) return;
     const pct = Math.round((index / total) * 100);
     if (bar) bar.style.width = `${pct}%`;
     if (txt) txt.textContent = `[${index}/${total}] Проверка: ${name}...`;
@@ -210,6 +218,7 @@ async function runAutoScanner() {
 
   try {
     const res = await api.system.scanStrategies(url);
+    if (S._scanCancelled) return;
     if (res.ok) {
       showToast(`🎉 Найдена рабочая стратегия: ${res.workingStrategy}!`, 'success', 6000);
       closeModal('modal-scan');
@@ -222,7 +231,9 @@ async function runAutoScanner() {
     showToast('Ошибка сканера: ' + err.message, 'error');
   } finally {
     unsub();
+    S._scanCancelled = false;
     if (btn) btn.disabled = false;
+    if (cancelBtn) cancelBtn.disabled = true;
   }
 }
 
@@ -578,7 +589,7 @@ function renderSites() {
 
     row.querySelector(`[data-toggle-site="${site.id}"]`)?.addEventListener('click', async () => {
       const s = S.sites.find(x => x.id === site.id);
-      if (s) { s.enabled = s.enabled === false; await saveStore(); renderSites(); }
+      if (s) { s.enabled = !(s.enabled !== false); await saveStore(); renderSites(); }
     });
     row.querySelector(`[data-del-site="${site.id}"]`)?.addEventListener('click', async () => {
       S.sites = S.sites.filter(x => x.id !== site.id);

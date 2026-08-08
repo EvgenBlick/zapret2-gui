@@ -357,8 +357,9 @@ function refreshTrayMenu() {
 }
 
 // ─── Engine (winws2) ──────────────────────────────────────
-async function startEngine(customArgs = null) {
+async function startEngine(customArgs = null, opts = {}) {
   if (isRunning) return { ok: false, err: 'Already running' };
+  const { skipHostlist = false } = opts;
 
   const store      = await getStore();
   const zapretPath = store.get('zapretPath') || BIN_DIR;
@@ -380,15 +381,14 @@ async function startEngine(customArgs = null) {
   const excludeSites = allSites.filter(s => s.enabled !== false && s.type === 'exclude');
 
   const extraArgs = [];
-  if (includeSites.length > 0) {
+  if (!skipHostlist && includeSites.length > 0) {
     const hostFile = path.join(os.tmpdir(), 'z2_hostlist.txt').replace(/\\/g, '/');
     const domainList = includeSites.map(s => s.domain.replace(/^\*\./, '')).filter(Boolean);
     fs.writeFileSync(hostFile, domainList.join('\n'), 'utf8');
     extraArgs.push(`--hostlist=${hostFile}`);
     log('info', `Hostlist (Обход DPI): ${domainList.length} доменов → ${hostFile}`);
   }
-
-  if (excludeSites.length > 0) {
+  if (!skipHostlist && excludeSites.length > 0) {
     const excludeFile = path.join(os.tmpdir(), 'z2_exclude_hostlist.txt').replace(/\\/g, '/');
     const excludeDomainList = excludeSites.map(s => s.domain.replace(/^\*\./, '')).filter(Boolean);
     fs.writeFileSync(excludeFile, excludeDomainList.join('\n'), 'utf8');
@@ -655,7 +655,7 @@ handle('system:scan-strategies', async (event, targetUrl = 'https://www.youtube.
       mainWindow.webContents.send('scan-progress', { index: i + 1, total: CANDIDATES.length, name: cand.name });
     }
 
-    const res = await startEngine(cand.args);
+    const res = await startEngine(cand.args, { skipHostlist: true });
     if (!res.ok) continue;
 
     await new Promise(r => setTimeout(r, 1200));
@@ -675,7 +675,7 @@ handle('system:scan-strategies', async (event, targetUrl = 'https://www.youtube.
       };
       store.set('profiles', profiles);
       store.set('activeProfile', 'default');
-      await startEngine(); // restart with winner
+      await startEngine(); // restart with winning strategy + hostlists
       return { ok: true, workingStrategy: cand.name, index: i + 1 };
     }
   }
